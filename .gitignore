@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch large model weights (auto-downloaded from Hub on Streamlit Cloud)
+models/bert_sentiment/*.safetensors
+models/bert_sentiment/*.bin
+models/xlmr_sentiment/*.safetensors
+models/xlmr_sentiment/*.bin
+
+# Environments
+.env
+venv/
+ENV/
+
+# OS artifacts
+.DS_Store
+Thumbs.db

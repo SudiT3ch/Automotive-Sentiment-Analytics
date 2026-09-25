@@ -131,6 +131,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Initialize Session State
+if "review_input" not in st.session_state:
+    st.session_state["review_input"] = "The battery range is excellent, but the charging time is too long."
+
+if "analysis_result" not in st.session_state:
+    st.session_state["analysis_result"] = None
+
+def apply_preset(text: str):
+    """Callback triggered on preset button click to reliably set review text."""
+    st.session_state["review_input"] = text
+    st.session_state["analysis_result"] = None
+
+
 # Header Section
 st.markdown("""
 <div class="project-header">
@@ -174,83 +187,96 @@ with col_ctrl1:
 with col_ctrl2:
     st.write("Preset Automotive Reviews:")
     p_col1, p_col2, p_col3 = st.columns(3)
-    preset_choice = None
-    if p_col1.button("🔋 Canonical Battery Example", use_container_width=True):
-        preset_choice = "The battery range is excellent, but the charging time is too long."
-    if p_col2.button("⛽ Mileage & Comfort", use_container_width=True):
-        preset_choice = "The mileage is excellent and the car is very comfortable."
-    if p_col3.button("🔧 Service & Maintenance Cost", use_container_width=True):
-        preset_choice = "The service is poor and the maintenance cost is expensive."
+    p_col1.button(
+        "🔋 Canonical Battery Example",
+        use_container_width=True,
+        on_click=apply_preset,
+        args=("The battery range is excellent, but the charging time is too long.",)
+    )
+    p_col2.button(
+        "⛽ Mileage & Comfort",
+        use_container_width=True,
+        on_click=apply_preset,
+        args=("The mileage is excellent and the car is very comfortable.",)
+    )
+    p_col3.button(
+        "🔧 Service & Maintenance Cost",
+        use_container_width=True,
+        on_click=apply_preset,
+        args=("The service is poor and the maintenance cost is expensive.",)
+    )
 
-# Review Input Box
-default_text = preset_choice if preset_choice else "The battery range is excellent, but the charging time is too long."
+# Review Input Box linked to Session State
 user_review = st.text_area(
     "Automotive Review Text:",
-    value=default_text,
+    key="review_input",
     height=90,
     help="Enter a vehicle review to extract individual aspects and their specific sentiments."
 )
 
 if st.button("🔍 Analyze Review & Identify Aspect Sentiments", type="primary", use_container_width=True):
-    if not user_review.strip():
+    current_text = st.session_state["review_input"].strip()
+    if not current_text:
         st.warning("Please enter a review text.")
     else:
         with st.spinner(f"Analyzing review using {selected_model}..."):
             pipeline = get_pipeline(model_type=selected_model)
-            res = pipeline.analyze_review(user_review)
+            st.session_state["analysis_result"] = pipeline.analyze_review(current_text)
 
-        # Output Section
-        st.markdown("### 📊 Analysis Output")
+# Display Analysis Output from Session State
+if st.session_state.get("analysis_result") is not None:
+    res = st.session_state["analysis_result"]
+    st.markdown("### 📊 Analysis Output")
 
-        if not res["aspects"]:
-            st.info("No specific aspect terms detected. Overall review sentiment classified below.")
-        else:
-            # 1. Specification Format Horizontal Table
-            st.markdown("#### 📌 Aspect Sentiment Table")
-            aspect_items = res["aspects"]
+    if not res["aspects"]:
+        st.info("No specific aspect terms detected. Overall review sentiment classified below.")
+    else:
+        # 1. Specification Format Horizontal Table
+        st.markdown("#### 📌 Aspect Sentiment Table")
+        aspect_items = res["aspects"]
 
-            th_aspects = "".join(f"<th>{item['aspect']}</th>" for item in aspect_items)
-            td_sentiments = ""
-            for item in aspect_items:
-                s = item["sentiment"]
-                badge_class = "badge-pos" if s == "Positive" else ("badge-neg" if s == "Negative" else "badge-neu")
-                td_sentiments += f'<td><span class="{badge_class}">{s}</span></td>'
+        th_aspects = "".join(f"<th>{item['aspect']}</th>" for item in aspect_items)
+        td_sentiments = ""
+        for item in aspect_items:
+            s = item["sentiment"]
+            badge_class = "badge-pos" if s == "Positive" else ("badge-neg" if s == "Negative" else "badge-neu")
+            td_sentiments += f'<td><span class="{badge_class}">{s}</span></td>'
 
-            html_table = f"""
-            <table class="spec-table">
-                <tr>
-                    <th style="width: 15%;">Aspect</th>
-                    {th_aspects}
-                </tr>
-                <tr>
-                    <th>Sentiment</th>
-                    {td_sentiments}
-                </tr>
-            </table>
-            """
-            st.markdown(html_table, unsafe_allow_html=True)
+        html_table = f"""
+        <table class="spec-table">
+            <tr>
+                <th style="width: 15%;">Aspect</th>
+                {th_aspects}
+            </tr>
+            <tr>
+                <th>Sentiment</th>
+                {td_sentiments}
+            </tr>
+        </table>
+        """
+        st.markdown(html_table, unsafe_allow_html=True)
 
-            # 2. Detailed Aspect Breakdown
-            st.markdown("#### 🔍 Breakdown by Aspect Domain & Extracted Clause")
-            detail_data = []
-            for item in aspect_items:
-                detail_data.append({
-                    "Aspect": item["aspect"],
-                    "Domain Category": item["domain"],
-                    "Sentiment": item["sentiment"],
-                    "Confidence": f"{item['confidence'] * 100:.1f}%",
-                    "Extracted Clause": f'"{item["clause"]}"'
-                })
-            st.dataframe(pd.DataFrame(detail_data), use_container_width=True)
+        # 2. Detailed Aspect Breakdown
+        st.markdown("#### 🔍 Breakdown by Aspect Domain & Extracted Clause")
+        detail_data = []
+        for item in aspect_items:
+            detail_data.append({
+                "Aspect": item["aspect"],
+                "Domain Category": item["domain"],
+                "Sentiment": item["sentiment"],
+                "Confidence": f"{item['confidence'] * 100:.1f}%",
+                "Extracted Clause": f'"{item["clause"]}"'
+            })
+        st.dataframe(pd.DataFrame(detail_data), use_container_width=True)
 
-        # Summary Metrics
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.metric("Overall Review Sentiment", res["overall_sentiment"])
-        with m2:
-            st.metric("Confidence", f"{res['overall_confidence'] * 100:.1f}%")
-        with m3:
-            st.metric("Model Used", res["model_used"])
+    # Summary Metrics
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric("Overall Review Sentiment", res["overall_sentiment"])
+    with m2:
+        st.metric("Confidence", f"{res['overall_confidence'] * 100:.1f}%")
+    with m3:
+        st.metric("Model Used", res["model_used"])
 
 st.markdown("---")
 st.caption("AI-Based Automotive Review and Customer Sentiment Analytics | BERT, XLM-R, NLP")
